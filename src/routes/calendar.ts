@@ -1,0 +1,150 @@
+/**
+ * /calendar 路由处理器
+ * 从 CALENDAR_KV 读取预生成的 .ics 文件返回给客户端
+ * 支持通过 ?platform= 参数过滤平台
+ */
+
+import type { Env } from '../types';
+import { ICS_KEY_PREFIX } from '../config';
+
+/**
+ * 处理 /calendar 请求
+ * @param request HTTP 请求对象
+ * @param env Cloudflare Workers 环境变量
+ * @returns 包含 .ics 内容的 HTTP 响应
+ */
+export async function handleCalendar(request: Request, env: Env): Promise<Response> {
+  const url = new URL(request.url);
+  const platforms = url.searchParams.getAll('platform');
+
+  try {
+    // 无参数时返回全平台 .ics
+    if (platforms.length === 0) {
+      const icsContent = await env.CALENDAR_KV.get(`${ICS_KEY_PREFIX}all`);
+
+      if (!icsContent) {
+        return new Response('日历数据尚未生成，请稍后再试。', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        });
+      }
+
+      return new Response(icsContent, {
+        headers: buildIcsHeaders('games-zh.ics'),
+      });
+    }
+
+    // 有参数时合并指定平台的 .ics
+    const icsParts: string[] = [];
+
+    for (const platform of platforms) {
+      const platformIcs = await env.CALENDAR_KV.get(`${ICS_KEY_PREFIX}${platform}`);
+      if (platformIcs) {
+        icsParts.push(platformIcs);
+      }
+    }
+
+    if (icsParts.length === 0) {
+      return new Response('未找到指定平台的日历数据。', {
+        status: 404,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+
+    // 如果只有一个平台，直接返回
+    if (icsParts.length === 1) {
+      return new Response(icsParts[0], {
+        headers: buildIcsHeaders(`games-zh-${platforms[0]}.ics`),
+      });
+    }
+
+    // 多个平台：合并 VEVENT 组件
+    const mergedIcs = mergeIcsFiles(icsParts);
+    return new Response(mergedIcs, {
+      headers: buildIcsHeaders('games-zh-merged.ics'),
+    });
+  } catch (error) {
+    console.error('[Calendar] 处理请求时发生错误:', error);
+    return new Response('服务器内部错误', { status: 500 });
+  }
+}
+
+/**
+ * 构建 ICS 响应的 Headers
+ * @param filename 下载文件名
+ * @returns Headers 对象
+ */
+function buildIcsHeaders(filename: string): HeadersInit {
+  return {
+    'Content-Type': 'text/calendar; charset=utf-8',
+    'Content-Disposition': `inline; filename=${filename}`,
+    'Cache-Control': 'public, max-age=3600',
+  };
+}
+
+/**
+ * 合并多个 .ics 文件的内容
+ * 保留第一个文件的 VCALENDAR 头部，合并所有 VEVENT
+ * @param icsFiles .ics 文件内容数组
+ * @returns 合并后的 .ics 内容
+ */
+function mergeIcsFiles(icsFiles: string[]): string {
+  if (icsFiles.length === 0) return '';
+  if (icsFiles.length === 1) return icsFiles[0];
+
+  // 提取第一个文件的 VCALENDAR 头部
+  const firstFile = icsFiles[0];
+  const headerEnd = firstFile.indexOf('BEGIN:VEVENT');
+  const header = headerEnd > 0 ? firstFile.substring(0, headerEnd) : firstFile.split('END:VCALENDAR')[0];
+
+  // 提取所有 VEVENT 块
+  const allEvents: string[] = [];
+  for (const file of icsFiles) {
+    const eventBlocks = extractEventBlocks(file);
+    allEvents.push(...eventBlocks);
+  }
+
+  // 去重（基于 UID）
+  const seenUids = new Set<string>();
+  const uniqueEvents: string[] = [];
+
+  for (const event of allEvents) {
+    const uidMatch = event.match(/UID:(.+)/);
+    if (uidMatch) {
+      const uid = uidMatch[1].trim();
+      if (!seenUids.has(uid)) {
+        seenUids.add(uid);
+        uniqueEvents.push(event);
+      }
+    } else {
+      uniqueEvents.push(event);
+    }
+  }
+
+  return header + uniqueEvents.join('\r\n') + '\r\nEND:VCALENDAR\r\n';
+}
+
+/**
+ * 从 .ics 内容中提取 VEVENT 块
+ * @param icsContent .ics 文件内容
+ * @returns VEVENT 块字符串数组（含 BEGIN/END 标记）
+ */
+function extractEventBlocks(icsContent: string): string[] {
+  const blocks: string[] = [];
+  const lines = icsContent.split(/\r?\n/);
+  let currentBlock: string[] | null = null;
+
+  for (const line of lines) {
+    if (line.trim() === 'BEGIN:VEVENT') {
+      currentBlock = [line];
+    } else if (line.trim() === 'END:VEVENT' && currentBlock) {
+      currentBlock.push(line);
+      blocks.push(currentBlock.join('\r\n'));
+      currentBlock = null;
+    } else if (currentBlock) {
+      currentBlock.push(line);
+    }
+  }
+
+  return blocks;
+}

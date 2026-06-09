@@ -1,0 +1,372 @@
+/* ============================================================
+   中文游戏发售日历 — 样式表
+   ============================================================ */
+
+:root {
+  --primary: rgb(75, 127, 238);
+  --primary-hover: rgb(55, 107, 218);
+  --bg: #E6EEFF;
+  --card-bg: #ffffff;
+  --text: #1a1a2e;
+  --text-secondary: #6b7280;
+  --border: #E9EAF1;
+  --shadow: rgba(0, 0, 0, 0.15);
+  --radius: 12px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  padding: 2rem 1rem;
+  line-height: 1.6;
+}
+
+.container {
+  width: 100%;
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+/* ============================================================
+   卡片
+   ============================================================ */
+
+.card {
+  background: var(--card-bg);
+  border-radius: var(--radius);
+  box-shadow: 0 4px 24px var(--shadow);
+  padding: 2rem;
+  width: 100%;
+}
+
+.title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 0.25rem;
+}
+
+.subtitle {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin-bottom: 1.5rem;
+}
+
+/* ============================================================
+   表单区块
+   ============================================================ */
+
+.form-section {
+  margin-bottom: 1.5rem;
+}
+
+.form-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+/* ============================================================
+   复选框
+   ============================================================ */
+
+.checkbox-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.625rem;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+  font-size: 0.9rem;
+}
+
+.checkbox-item:hover {
+  border-color: var(--primary);
+  background: rgba(75, 127, 238, 0.04);
+}
+
+.checkbox-item input[type="checkbox"] {
+  display: none;
+}
+
+.checkmark {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  position: relative;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.checkbox-item input[type="checkbox"]:checked ~ .checkmark {
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.checkbox-item input[type="checkbox"]:checked ~ .checkmark::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 6px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.checkbox-item input[type="checkbox"]:checked ~ .label-text {
+  font-weight: 500;
+}
+
+/* ============================================================
+   URL 输入框
+   ============================================================ */
+
+.url-group {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.url-input {
+  flex: 1;
+  padding: 0.625rem 0.875rem;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: var(--text);
+  background: #f9fafb;
+  outline: none;
+  transition: border-color 0.15s ease;
+  min-width: 0;
+}
+
+.url-input:focus {
+  border-color: var(--primary);
+}
+
+.url-input::placeholder {
+  color: #c0c4cc;
+}
+
+/* ============================================================
+   复制按钮
+   ============================================================ */
+
+.copy-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.625rem 1rem;
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.copy-btn:hover:not(:disabled) {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.copy-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.copy-btn:disabled {
+  background: var(--border);
+  cursor: not-allowed;
+}
+
+.copy-btn svg {
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   复制提示
+   ============================================================ */
+
+.copy-toast {
+  display: none;
+  text-align: center;
+  color: #10b981;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+  animation: fadeIn 0.2s ease;
+}
+
+.copy-toast.show {
+  display: block;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   订阅说明
+   ============================================================ */
+
+.instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.instructions details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.instructions summary {
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 0.9rem;
+  background: #f9fafb;
+  transition: background 0.15s ease;
+}
+
+.instructions summary:hover {
+  background: #f0f2f5;
+}
+
+.instructions details[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.instructions ol {
+  padding: 0.75rem 1rem 0.75rem 2.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.8;
+}
+
+.instructions ol li {
+  margin-bottom: 0.25rem;
+}
+
+.instructions a {
+  color: var(--primary);
+  text-decoration: none;
+}
+
+.instructions a:hover {
+  text-decoration: underline;
+}
+
+.instructions strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ============================================================
+   页脚
+   ============================================================ */
+
+.footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.source-link {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.source-link:hover {
+  color: var(--primary);
+}
+
+.footer-sep {
+  color: var(--border);
+}
+
+.footer-note {
+  font-size: 0.75rem;
+}
+
+/* ============================================================
+   响应式
+   ============================================================ */
+
+@media (max-width: 480px) {
+  body {
+    padding: 1rem 0.75rem;
+  }
+
+  .card {
+    padding: 1.5rem;
+  }
+
+  .title {
+    font-size: 1.25rem;
+  }
+
+  .checkbox-group {
+    gap: 0.5rem;
+  }
+
+  .checkbox-item {
+    padding: 0.4rem 0.7rem;
+    font-size: 0.825rem;
+  }
+
+  .url-group {
+    flex-direction: column;
+  }
+
+  .copy-btn {
+    justify-content: center;
+  }
+}
