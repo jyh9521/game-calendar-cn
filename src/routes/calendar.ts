@@ -104,20 +104,57 @@ function mergeIcsFiles(icsFiles: string[], calendarName?: string): string {
     allEvents.push(...eventBlocks);
   }
 
-  // 去重：基于 SUMMARY + DTSTART（同一游戏+同一日期只保留一个事件）
-  const seenKeys = new Set<string>();
-  const uniqueEvents: string[] = [];
+  // 合并重复事件：同一游戏+同一日期合并为一条，名称后标注平台
+  // 例如 "[艾尔登法环] Elden Ring" → "[艾尔登法环] Elden Ring (PS5, Switch, PC)"
+  const eventMap = new Map<string, { event: string; platforms: Set<string> }>();
 
   for (const event of allEvents) {
     const summaryMatch = event.match(/SUMMARY:(.+)/);
     const dtstartMatch = event.match(/DTSTART[^:]*:(.+)/);
 
     if (summaryMatch && dtstartMatch) {
-      const key = `${summaryMatch[1].trim()}|${dtstartMatch[1].trim()}`;
-      if (!seenKeys.has(key)) {
-        seenKeys.add(key);
-        uniqueEvents.push(event);
+      const summary = summaryMatch[1].trim();
+      const dtstart = dtstartMatch[1].trim();
+      const key = `${summary}|${dtstart}`;
+
+      // 从 UID 中提取平台信息（格式：wiki-...@game-calendar-cn-ps5）
+      const uidMatch = event.match(/UID:([^\r\n]+)/);
+      let platform = '';
+      if (uidMatch) {
+        const uid = uidMatch[1].trim();
+        // 从 UID 末尾提取平台（如 ...@game-calendar-cn-ps5）
+        const platMatch = uid.match(/@game-calendar-cn-([a-z0-9_]+)$/);
+        if (platMatch) {
+          platform = platMatch[1].toUpperCase();
+        }
       }
+
+      const existing = eventMap.get(key);
+      if (existing) {
+        if (platform) existing.platforms.add(platform);
+      } else {
+        const platforms = new Set<string>();
+        if (platform) platforms.add(platform);
+        eventMap.set(key, { event, platforms });
+      }
+    } else {
+      // 无法解析的事件直接保留
+      const fallbackKey = `__fallback_${allEvents.indexOf(event)}`;
+      eventMap.set(fallbackKey, { event, platforms: new Set() });
+    }
+  }
+
+  // 生成最终事件列表，为多平台事件追加平台标注
+  const uniqueEvents: string[] = [];
+  for (const { event, platforms } of eventMap.values()) {
+    if (platforms.size > 1) {
+      // 多平台：在 SUMMARY 后追加平台列表
+      const platformList = Array.from(platforms).sort().join(', ');
+      const updatedEvent = event.replace(
+        /^(SUMMARY:.+)/m,
+        (line) => `${line} (${platformList})`,
+      );
+      uniqueEvents.push(updatedEvent);
     } else {
       uniqueEvents.push(event);
     }
