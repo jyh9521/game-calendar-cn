@@ -28,8 +28,11 @@ function parseWikiResponse(data: any): Map<string, string> {
     if (!zhLink) continue;
 
     // 清洗中文标题：去除消歧义后缀
-    let zhTitle: string = zhLink['*'];
-    zhTitle = zhTitle
+    // formatversion=2 使用 `title` 字段，旧版使用 `*` 字段
+    const rawTitle = zhLink['*'] ?? zhLink.title;
+    if (!rawTitle || typeof rawTitle !== 'string') continue;
+
+    let zhTitle: string = rawTitle
       .replace(/\s*\(游戏\)$/, '')
       .replace(/\s*\(电子游戏\)$/, '')
       .replace(/\s*\(游戏系列\)$/, '')

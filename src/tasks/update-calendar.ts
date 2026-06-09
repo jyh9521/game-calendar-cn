@@ -13,7 +13,8 @@ import { fetchAllSources } from '../calendar/fetcher';
 import { parseIcs, extractUniqueGameNames } from '../calendar/parser';
 import { fetchWikipediaGameReleases } from '../calendar/wiki-fetcher';
 import { parseWikitextToEvents, extractUniqueGameNamesFromEvents } from '../calendar/wiki-parser';
-import { translateGameNames } from '../translator/engine';
+import { translateGameNamesFast } from '../translator/engine';
+import { translateWithDeepSeek } from '../translator/deepseek';
 import { generateIcs, generatePlatformIcs } from '../calendar/generator';
 import { ICS_KEY_PREFIX, ICS_FILE_TTL } from '../config';
 
@@ -178,21 +179,23 @@ export async function updateCalendar(env: Env): Promise<void> {
     console.log(`[UpdateCalendar] 共 ${uniqueNames.length} 个唯一游戏名称`);
 
     // ============================================================
-    // 步骤 4：批量翻译
+    // 步骤 4：快速翻译（缓存 + 本地词库 + Wikipedia）
     // ============================================================
-    console.log('[UpdateCalendar] 步骤 4/6: 批量翻译游戏名称');
-    const translations = await translateGameNames(uniqueNames, env);
+    console.log('[UpdateCalendar] 步骤 4/6: 快速翻译（缓存+本地词库+Wikipedia）');
+    const fastTranslations = await translateGameNamesFast(uniqueNames, env);
 
-    // 构建翻译映射表（原始名 → 中文名）
+    // 构建翻译映射表
     const translationMap = new Map<string, string>();
-    for (const t of translations) {
+    for (const t of fastTranslations) {
       translationMap.set(t.original, t.translated);
     }
 
+    console.log(`[UpdateCalendar] 快速翻译完成: ${translationMap.size}/${uniqueNames.length} 命中`);
+
     // ============================================================
-    // 步骤 5：替换事件标题为翻译后的名称
+    // 步骤 5：替换事件标题并生成 .ics 文件
     // ============================================================
-    console.log('[UpdateCalendar] 步骤 5/6: 替换事件标题');
+    console.log('[UpdateCalendar] 步骤 5/6: 生成并存储 .ics 文件');
 
     /** 翻译单个事件的标题格式：[中文名] English Name */
     function translateEvent(event: CalendarEvent): CalendarEvent {
@@ -216,12 +219,7 @@ export async function updateCalendar(env: Env): Promise<void> {
       translatedAllEvents.push(...translated);
     }
 
-    // ============================================================
-    // 步骤 6：生成 .ics 文件并写入 KV
-    // ============================================================
-    console.log('[UpdateCalendar] 步骤 6/6: 生成并存储 .ics 文件');
-
-    // 生成全平台合并 .ics
+    // 生成全平台合并 .ics 并立即写入 KV
     const allIcs = generateIcs(translatedAllEvents);
     await env.CALENDAR_KV.put(`${ICS_KEY_PREFIX}all`, allIcs, {
       expirationTtl: ICS_FILE_TTL,
@@ -241,6 +239,22 @@ export async function updateCalendar(env: Env): Promise<void> {
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[UpdateCalendar] 更新完成！耗时 ${elapsed} 秒`);
+
+    // ============================================================
+    // 步骤 6：DeepSeek 补充翻译（尽力而为，不阻塞 ICS 生成）
+    // ============================================================
+    const untranslated = uniqueNames.filter((n) => !translationMap.has(n));
+    if (untranslated.length > 0) {
+      console.log(`[UpdateCalendar] 步骤 6/6: DeepSeek 补充翻译 (${untranslated.length} 个)`);
+      try {
+        const deepseekTranslations = await translateWithDeepSeek(untranslated, env.DEEPSEEK_API_KEY);
+        if (deepseekTranslations.size > 0) {
+          console.log(`[UpdateCalendar] DeepSeek 翻译完成: ${deepseekTranslations.size} 个`);
+        }
+      } catch (err) {
+        console.warn('[UpdateCalendar] DeepSeek 补充翻译失败（不影响已生成的日历）:', err);
+      }
+    }
   } catch (error) {
     console.error('[UpdateCalendar] 更新过程中发生错误:', error);
     throw error;

@@ -136,25 +136,65 @@ function isMonthSection(sectionTitle: string): boolean {
   return Object.keys(MONTH_MAP).includes(normalized);
 }
 
+/** 季度分区名称到虚拟 key 的映射 */
+const QUARTER_MAP: Record<string, string> = {
+  'january–march': 'Q1',
+  'april–june': 'Q2',
+  'july–september': 'Q3',
+  'october–december': 'Q4',
+  'january-march': 'Q1',
+  'april-june': 'Q2',
+  'july-september': 'Q3',
+  'october-december': 'Q4',
+};
+
 /**
- * 获取指定月份对应的 section index 列表
- * 维基百科的分区结构通常是：
- * - Section 0: 主体内容（跳过）
- * - Section 1-4: 非游戏数据（如 "See also", "References" 等，或 Jan-Mar 等季度分区）
- * - 每个季度分区可能包含月份子分区
+ * 判断分区标题是否为季度名称（如 "January–March", "April–June" 等）
+ * @param sectionTitle 分区标题
+ * @returns 是否为季度分区
+ */
+function isQuarterSection(sectionTitle: string): boolean {
+  const normalized = sectionTitle.trim().toLowerCase();
+  return normalized in QUARTER_MAP;
+}
+
+/**
+ * 获取需要抓取的分区索引列表
+ * 优先查找单独月份分区，如果没有则查找季度分区
+ *
+ * 维基百科的分区结构示例：
+ * - Section 0: 主体内容
+ * - Section 1: Legend
+ * - Section 2: List（父分区）
+ * - Section 3: January–March（季度子分区）
+ * - Section 4: April–June
+ * - Section 5: July–September
+ * - Section 6: October–December
+ * - Section 7+: Notes, References 等
  *
  * @param sections 分区列表
- * @returns 月份分区索引数组 { month: string, index: string }[]
+ * @returns 分区索引数组 { key: string, index: string }[]
  */
-function extractMonthSections(sections: WikiSection[]): Array<{ month: string; index: string }> {
-  const result: Array<{ month: string; index: string }> = [];
+function extractMonthSections(sections: WikiSection[]): Array<{ key: string; index: string }> {
+  const result: Array<{ key: string; index: string }> = [];
 
   for (const section of sections) {
-    // 检查是否为月份分区（level 2 或 3）
-    if (isMonthSection(section.line)) {
-      const monthNum = MONTH_MAP[section.line.trim().toLowerCase()];
+    const line = section.line.trim();
+
+    // 优先匹配单独月份（如 "January", "February"）
+    if (isMonthSection(line)) {
+      const monthNum = MONTH_MAP[line.toLowerCase()];
       if (monthNum) {
-        result.push({ month: monthNum, index: section.index });
+        result.push({ key: monthNum, index: section.index });
+      }
+      continue;
+    }
+
+    // 其次匹配季度分区（如 "January–March"）
+    if (isQuarterSection(line)) {
+      const quarterKey = QUARTER_MAP[line.toLowerCase()];
+      if (quarterKey) {
+        result.push({ key: quarterKey, index: section.index });
       }
     }
   }
@@ -202,27 +242,27 @@ export async function fetchWikipediaGameReleases(
   }
 
   console.log(
-    `[WikiFetcher] 找到 ${monthSections.length} 个月份分区: ${monthSections.map((m) => m.month).join(', ')}`,
+    `[WikiFetcher] 找到 ${monthSections.length} 个分区: ${monthSections.map((m) => m.key).join(', ')}`,
   );
 
-  // 并发获取各月份的 wikitext
+  // 并发获取各分区的 wikitext
   const results = new Map<string, string>();
   const settled = await Promise.allSettled(
-    monthSections.map(async ({ month, index }) => {
+    monthSections.map(async ({ key, index }) => {
       const wikitext = await fetchSectionWikitext(pageTitle, index, userAgent);
-      return { month, wikitext };
+      return { key, wikitext };
     }),
   );
 
   for (const result of settled) {
     if (result.status === 'fulfilled' && result.value.wikitext) {
-      results.set(result.value.month, result.value.wikitext);
+      results.set(result.value.key, result.value.wikitext);
     } else if (result.status === 'rejected') {
-      console.error(`[WikiFetcher] 获取月份数据失败:`, result.reason);
+      console.error(`[WikiFetcher] 获取分区数据失败:`, result.reason);
     }
   }
 
-  console.log(`[WikiFetcher] 抓取完成: 成功获取 ${results.size} 个月份的数据`);
+  console.log(`[WikiFetcher] 抓取完成: 成功获取 ${results.size} 个分区的数据`);
   return results;
 }
 

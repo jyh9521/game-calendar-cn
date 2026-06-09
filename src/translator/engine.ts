@@ -170,3 +170,76 @@ export async function translateGameNames(
 
   return allResults;
 }
+
+/**
+ * 快速批量翻译游戏名称（仅使用缓存 + 本地词库 + Wikipedia，跳过 DeepSeek）
+ * 用于首次生成 ICS 时快速获取翻译结果，避免 DeepSeek API 超时
+ *
+ * @param names 需要翻译的英文游戏名列表
+ * @param env Cloudflare Workers 环境变量
+ * @returns 翻译结果数组（仅包含成功翻译的条目）
+ */
+export async function translateGameNamesFast(
+  names: string[],
+  env: Env
+): Promise<TranslationResult[]> {
+  if (names.length === 0) return [];
+
+  const allResults: TranslationResult[] = [];
+  const remaining = [...names];
+
+  // 第零层：KV 缓存查询
+  try {
+    const cached = await getCachedTranslations(remaining, env.TRANSLATION_KV);
+    if (cached.length > 0) {
+      allResults.push(...cached);
+      const cachedNames = new Set(cached.map((c) => c.original));
+      remaining.splice(0, remaining.length, ...remaining.filter((n) => !cachedNames.has(n)));
+    }
+  } catch (error) {
+    console.error('[Engine/Fast] 缓存查询失败:', error);
+  }
+
+  if (remaining.length === 0) return allResults;
+
+  // 第一层：本地词库查询
+  try {
+    const localResults = await batchLookupLocalDict(remaining, env.TRANSLATION_KV);
+    if (localResults.size > 0) {
+      for (const [original, translated] of localResults) {
+        allResults.push({ original, translated, source: 'local' });
+      }
+      remaining.splice(0, remaining.length, ...remaining.filter((n) => !localResults.has(n)));
+      await setTranslations(
+        allResults.filter((r) => r.source === 'local'),
+        env.TRANSLATION_KV
+      );
+    }
+  } catch (error) {
+    console.error('[Engine/Fast] 本地词库查询失败:', error);
+  }
+
+  if (remaining.length === 0) return allResults;
+
+  // 第二层：Wikipedia 中文 langlink 查询
+  try {
+    const wikiResults = await queryWikipedia(remaining, env.WIKIPEDIA_USER_AGENT);
+    if (wikiResults.size > 0) {
+      for (const [original, translated] of wikiResults) {
+        allResults.push({ original, translated, source: 'wikipedia' });
+      }
+      await setTranslations(
+        allResults.filter((r) => r.source === 'wikipedia'),
+        env.TRANSLATION_KV
+      );
+    }
+  } catch (error) {
+    console.error('[Engine/Fast] Wikipedia 查询失败:', error);
+  }
+
+  console.log(
+    `[Engine/Fast] 快速翻译完成: ${allResults.length}/${names.length} 命中`
+  );
+
+  return allResults;
+}
