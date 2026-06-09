@@ -99,28 +99,31 @@ export function generateIcs(events: CalendarEvent[], calendarName?: string): str
   lines.push('BEGIN:VCALENDAR');
   lines.push(foldLine(`PRODID:${PROD_ID}`));
   lines.push(`VERSION:${CALENDAR_VERSION}`);
+  lines.push('CALSCALE:GREGORIAN');
+  lines.push('METHOD:PUBLISH');
   lines.push(foldLine(`X-WR-CALNAME:${escapeIcs(calendarName || CALENDAR_NAME)}`));
   lines.push(foldLine(`X-WR-CALDESC:${escapeIcs(CALENDAR_DESCRIPTION)}`));
+
+  // DTSTAMP 时间戳（所有事件共用同一个生成时间）
+  const now = new Date();
+  const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
 
   // VEVENT 组件
   for (const event of events) {
     lines.push('BEGIN:VEVENT');
-    lines.push(foldLine(`UID:${event.uid}@game-calendar-cn`));
-    lines.push(foldLine(`SUMMARY:${escapeIcs(event.summary)}`));
+    lines.push(foldLine(`UID:${event.uid}`));
+    lines.push(foldLine(`DTSTAMP:${stamp}`));
     lines.push(foldLine(`DTSTART;VALUE=DATE:${formatDateForIcs(event.dtstart)}`));
 
     if (event.dtend) {
       lines.push(foldLine(`DTEND;VALUE=DATE:${formatDateForIcs(event.dtend)}`));
     }
 
+    lines.push(foldLine(`SUMMARY:${escapeIcs(event.summary)}`));
+
     if (event.description) {
       lines.push(foldLine(`DESCRIPTION:${escapeIcs(event.description)}`));
     }
-
-    // 添加时间戳
-    const now = new Date();
-    const stamp = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-    lines.push(foldLine(`DTSTAMP:${stamp}`));
 
     lines.push('END:VEVENT');
   }

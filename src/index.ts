@@ -13,7 +13,7 @@ export default {
    * HTTP 请求处理
    * 根据 URL 路径分发到不同的路由处理器
    */
-  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const path = url.pathname;
 
@@ -27,6 +27,20 @@ export default {
       return handleCalendar(request, env);
     }
 
+    // 手动触发日历更新（仅限 POST /admin/update）
+    if (path === '/admin/update' && request.method === 'POST') {
+      ctx.waitUntil(
+        updateCalendar(env).then(() => {
+          console.log('[Admin] 手动更新完成');
+        }).catch((err) => {
+          console.error('[Admin] 手动更新失败:', err);
+        }),
+      );
+      return new Response('日历更新已触发，请查看 Worker 日志了解进度。', {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      });
+    }
+
     // 首页：返回简单说明页
     if (path === '/' || path === '') {
       return new Response(
@@ -38,6 +52,7 @@ export default {
           '- `GET /calendar` — 获取全部平台的中文游戏发售日历（.ics）',
           '- `GET /calendar?platform=ps5&platform=switch` — 获取指定平台日历',
           '- `GET /ping` — 健康检查',
+          '- `POST /admin/update` — 手动触发日历更新',
           '',
           '## 订阅方式',
           '',

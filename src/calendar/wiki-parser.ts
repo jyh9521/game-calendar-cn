@@ -29,6 +29,8 @@ const PLATFORM_MAP: Record<string, string> = {
   PS3: 'ps3',
   NS: 'switch',
   NSW: 'switch',
+  NS2: 'switch2',
+  NSW2: 'switch2',
   XBX: 'xbox_series',
   XBSX: 'xbox_series',
   XBO: 'xbox_one',
