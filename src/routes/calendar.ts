@@ -59,7 +59,7 @@ export async function handleCalendar(request: Request, env: Env): Promise<Respon
     }
 
     // 多个平台：合并 VEVENT 组件
-    const mergedIcs = mergeIcsFiles(icsParts);
+    const mergedIcs = mergeIcsFiles(icsParts, '中文游戏发售日历');
     return new Response(mergedIcs, {
       headers: buildIcsHeaders('games-zh-merged.ics'),
     });
@@ -88,7 +88,7 @@ function buildIcsHeaders(filename: string): HeadersInit {
  * @param icsFiles .ics 文件内容数组
  * @returns 合并后的 .ics 内容
  */
-function mergeIcsFiles(icsFiles: string[]): string {
+function mergeIcsFiles(icsFiles: string[], calendarName?: string): string {
   if (icsFiles.length === 0) return '';
   if (icsFiles.length === 1) return icsFiles[0];
 
@@ -104,16 +104,18 @@ function mergeIcsFiles(icsFiles: string[]): string {
     allEvents.push(...eventBlocks);
   }
 
-  // 去重（基于 UID）
-  const seenUids = new Set<string>();
+  // 去重：基于 SUMMARY + DTSTART（同一游戏+同一日期只保留一个事件）
+  const seenKeys = new Set<string>();
   const uniqueEvents: string[] = [];
 
   for (const event of allEvents) {
-    const uidMatch = event.match(/UID:(.+)/);
-    if (uidMatch) {
-      const uid = uidMatch[1].trim();
-      if (!seenUids.has(uid)) {
-        seenUids.add(uid);
+    const summaryMatch = event.match(/SUMMARY:(.+)/);
+    const dtstartMatch = event.match(/DTSTART[^:]*:(.+)/);
+
+    if (summaryMatch && dtstartMatch) {
+      const key = `${summaryMatch[1].trim()}|${dtstartMatch[1].trim()}`;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
         uniqueEvents.push(event);
       }
     } else {
@@ -121,7 +123,16 @@ function mergeIcsFiles(icsFiles: string[]): string {
     }
   }
 
-  return header + uniqueEvents.join('\r\n') + '\r\nEND:VCALENDAR\r\n';
+  // 如果指定了日历名称，替换头部中的 X-WR-CALNAME
+  let mergedHeader = header;
+  if (calendarName) {
+    mergedHeader = header.replace(
+      /X-WR-CALNAME:.*/,
+      `X-WR-CALNAME:${calendarName}`,
+    );
+  }
+
+  return mergedHeader + uniqueEvents.join('\r\n') + '\r\nEND:VCALENDAR\r\n';
 }
 
 /**
